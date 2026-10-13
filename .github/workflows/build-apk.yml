@@ -1,0 +1,51 @@
+name: Build RemoveB APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate project (supports RemoveB.zip at repo root)
+        id: loc
+        run: |
+          if [ -f RemoveB.zip ]; then
+            rm -rf _src && mkdir _src && unzip -oq RemoveB.zip -d _src
+            F=$(find _src -name settings.gradle.kts | head -n1)
+          else
+            F=$(find . -name settings.gradle.kts -not -path './_src/*' | head -n1)
+          fi
+          [ -n "$F" ] || { echo "settings.gradle.kts not found"; exit 1; }
+          echo "dir=$(dirname "$F")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: gradle assembleDebug --stacktrace
+
+      - name: Build release APK
+        continue-on-error: true
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: gradle assembleRelease --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RemoveB-apk
+          path: ${{ steps.loc.outputs.dir }}/app/build/outputs/apk/**/*.apk
