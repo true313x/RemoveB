@@ -12,14 +12,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Locate project (supports RemoveB.zip at repo root)
+      - name: Locate project (newest RemoveB*.zip in repo root, else source tree)
         id: loc
         run: |
-          if [ -f RemoveB.zip ]; then
-            rm -rf _src && mkdir _src && unzip -oq RemoveB.zip -d _src
+          Z=""; BEST=-1
+          for f in RemoveB*.zip; do
+            [ -f "$f" ] || continue
+            t=$(git log -1 --format=%ct -- "$f")
+            t=${t:-0}
+            if [ "$t" -gt "$BEST" ]; then BEST=$t; Z="$f"; fi
+          done
+          if [ -n "$Z" ]; then
+            echo "Using zip: $Z (committed $(date -u -d @"$BEST" +%F\ %T) UTC)"
+            rm -rf _src && mkdir _src && unzip -oq "$Z" -d _src
             F=$(find _src -name settings.gradle.kts | head -n1)
           else
+            echo "No zip found, using source tree"
             F=$(find . -name settings.gradle.kts -not -path './_src/*' | head -n1)
           fi
           [ -n "$F" ] || { echo "settings.gradle.kts not found"; exit 1; }
